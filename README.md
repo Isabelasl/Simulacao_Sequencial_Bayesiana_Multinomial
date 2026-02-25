@@ -1,0 +1,2 @@
+# Simulacao_Sequencial_Bayesiana_Multinomial
+Simulação Sequencial Bayesiana Multinomial
