@@ -1,0 +1,535 @@
+### Script para simulação do processo de 
+### estimação sequencial bayesiana multinomial e 
+### estimação convencional (método clássico/frequentista)
+### utilizando distribuição multinomial
+
+
+rm(list=ls())   
+set.seed(24052024) # fixa uma semente para quando repetir obter mesmos resultados
+
+
+#### Estimação Sequencial Bayesiana #####
+
+########## Inserir número de classes
+k <- 3
+k <- k-1 # número de classes menos um (Pois são k+1 classes
+
+######### Inserir valores para os parametros iniciais da priori 
+# tem que ser a quantidade de categorias (exemplo 3 categorias, então 3 parâmetros)
+a1 <- 1			
+a2 <- 1			
+a3 <- 1
+
+a0 <- sum(a1, a2, a3); a0
+
+######## Inserir valor para o custo
+custo <- 0.001      # custo por observação
+
+# Inserir valor dos parâmetros proporções da multinomial (valores reais das
+# proporções para as quais vamos gerar multinomiais)
+# tem que ser a quantidade de categorias (exemplo 3 categorias, então 3 parâmetros)
+# e ainda tem a particularidade que a somas dos p tem que ser 1
+
+
+p0 <- c(0.1, 0.1, 0.8)
+
+# Cálculos iniciais
+
+# Média priori
+mpriori <-c(a1/a0, a2/a0, a3/a0)
+mpriori
+
+# Variância priori
+varpriori <- c((a1*(a0-a1))/(((a0)^2)*(a0+1)), (a2*(a0-a2))/(((a0)^2)*(a0+1)), (a3*(a0-a3))/(((a0)^2)*(a0+1)))
+varpriori
+
+# Covariância priori
+covpriori <- c((-(a1*a2))/(((a0)^2)*(a0+1)), (-(a1*a3))/(((a0)^2)*(a0+1)), (-(a2*a3))/(((a0)^2)*(a0+1)))
+covpriori
+
+
+
+#### Aqui começa a simulação ####
+
+# Inserir parâmetros da simulação:
+nsim <- 1000 # quantas vezes vai simular 
+tam <- 400 # tamanho das multinomiais que vamos simular 
+
+# Inserir o tamanho de amostra para fazer a estimação frequentista/classico
+nclassico <- 400
+
+# Inserir aqui os tamanhos que depois vamos cortar a lista de matrizes realizadas
+# com o nclassico máximo para fazer mais tamanhos de amostra com o frequentista
+nclassico100 <- 100 
+nclassico50 <- 50
+nclassico20 <- 20
+
+# Construindo as matrizes que vão receber (armazenar) os resultados das simulações:
+matsn <- matrix(0, tam, length(p0))             
+matpropseqbay <- matrix(0, nsim, length(p0))     
+matsoma <- matrix(0, nsim, length(p0))           
+matnamostral <- matrix(0, nsim, 1)              
+matrimediato <- matrix(0, nsim, 1)               
+matresperado <- matrix(0, nsim, 1)               
+matpropclassico <- matrix(0, nsim, length(p0))   
+matvarposteriori <- matrix(0, nsim, length(p0))  
+matcovposteriori <- matrix(0, nsim, length(p0))  
+matparposteriori <- matrix(0, nsim, length(p0))  
+matsomaclassico <- matrix(0, nsim, length(p0))  
+
+matxseq_list <- vector("list", nsim)                  
+matxseq_complemento_list <- vector("list", nsim)      
+matxseq_complemento_list_soma <- vector("list", nsim)  
+matcomplemento_list <- vector("list", nsim)          
+
+
+
+lista_propseqbay <- vector("list", nsim)
+lista_rimediato <- vector("list", nsim)  
+lista_resperado <- vector("list", nsim) 
+lista_parpost <- vector("list", nsim)   
+
+
+##### Geração das amostras multinomiais #######
+
+for(i in 1:nsim) 
+{
+  sn <- rep(0, length(p0))
+  n <- 1
+  matx <- matrix(0, tam, length(p0))
+  
+  
+ 
+  prop_seqbay <- matrix(0, tam, length(p0))
+  riscos_imediatos <- numeric()       
+  riscos_esperados <- numeric()
+  par_post <- matrix(0, tam, length(p0))
+  
+  repeat{            
+    
+    x <- rmultinom(1, 1, p0)  
+    
+    matx[n, ] <- x
+    sn <- sn + x
+    matsn[n, ] <- sn
+    m <- n
+    
+    # Calcula as médias a posteriori de Dirichlet que são as estimativas das proporções
+    d1 <- (sn[1] + a1) / (a0 + m)
+    d2 <- (sn[2] + a2) / (a0 + m)
+    d3 <- (sn[3] + a3) / (a0 + m)
+    
+    # Calcula o risco imediato 
+    rimediato <- (((1*(sn[1] + a1) + 1*(sn[2] + a2) + 1*(sn[3] + a3)) * sum(sn + c(a1, a2, a3))) - 
+                    (1*(sn[1] + a1)^2 + 1*(sn[2] + a2)^2 + 1*(sn[3] + a3)^2)) / 
+      ((sum(sn + c(a1, a2, a3))^2) * (sum(sn + c(a1, a2, a3)) + 1))
+    
+ 
+    
+    # Calcula o risco esperado 
+    resperado <- custo + (rimediato * ((a0 + m) / (a0 + m + 1)))
+    
+    # Calcula os parâmetros da posteriori
+    a1post <- a1 + sn[1]
+    a2post <- a2 + sn[2]
+    a3post <- a3 + sn[3]
+    
+    # Calcula a variância a posteriori
+    varpost1 <- ((sn[1]+a1)*(sum(sn+c(a1,a2,a3))-(sn[1]+a1)))/(((sum(sn+c(a1,a2,a3)))^2)*((sum(sn+c(a1, a2, a3)))+1))
+    varpost2 <- ((sn[2]+a2)*(sum(sn+c(a1,a2,a3))-(sn[2]+a2)))/(((sum(sn+c(a1,a2,a3)))^2)*((sum(sn+c(a1, a2, a3)))+1))
+    varpost3 <- ((sn[3]+a3)*(sum(sn+c(a1,a2,a3))-(sn[3]+a3)))/(((sum(sn+c(a1,a2,a3)))^2)*((sum(sn+c(a1, a2, a3)))+1))
+    
+    
+    # Calcula a covariância a posteriori
+    covarpost12 <- (-(sn[1]+a1)*(sn[2]+a2))/(((sum(sn+c(a1,a2,a3)))^2)*((sum(sn+c(a1, a2, a3)))+1))
+    covarpost13 <- (-(sn[1]+a1)*(sn[3]+a3))/(((sum(sn+c(a1,a2,a3)))^2)*((sum(sn+c(a1, a2, a3)))+1))
+    covarpost23 <- (-(sn[2]+a2)*(sn[3]+a3))/(((sum(sn+c(a1,a2,a3)))^2)*((sum(sn+c(a1, a2, a3)))+1))
+    
+    
+    # Armazena os resultados
+    matrimediato[i] <- rimediato
+    matresperado[i] <- resperado
+    matnamostral[i] <- m
+    matpropseqbay[i, ] <- c(d1, d2, d3)
+    matsoma[i, ] <- sn
+    matparposteriori[i, ] <- c(a1post, a2post, a3post)
+    matvarposteriori[i, ] <- c(varpost1, varpost2, varpost3)
+    matcovposteriori[i, ] <- c(covarpost12, covarpost13, covarpost23)
+    
+    # Armazena os resultados de cada passo do seq bay para cada simulação
+    prop_seqbay[n, ] <- c(d1, d2, d3)
+    riscos_imediatos <- c(riscos_imediatos, rimediato)
+    riscos_esperados <- c(riscos_esperados, resperado)
+    par_post[n, ] <- c(a1post, a2post, a3post)
+    
+    
+    if(rimediato < resperado) break() 
+    n <- n + 1
+    
+  }
+  
+  matxseq_list[[i]] <- matx[1:n, ]  # armazenar as observações de cada iteração na lista (só sequencial bayesiana)
+  
+  # Armazena a lista de resultados de cada passo do seq bays para a simulação i
+  lista_propseqbay[[i]] <- prop_seqbay[1:n, ]
+  lista_rimediato[[i]] <- riscos_imediatos
+  lista_resperado[[i]] <- riscos_esperados
+  lista_parpost[[i]] <- par_post[1:n, ]
+  
+  
+  ######## Estimação clássica (convencional) #######
+  # Está dentro do for porque temos que fazer nsim vezes também da clássica
+  # mas acho que aqui não precisava definir nclassico, acho que nclassico=tam definido anteriormente (mas deixar assim por enquanto)
+  
+  # Definir o tamanho da amostra considerando método clássico
+  nclassico <-  nclassico 
+  
+  
+  if (n < nclassico) {
+    complemento <- matrix(0, nclassico - n, length(p0))
+    complemento <- t(rmultinom(nclassico - n, 1, p0)) 
+    matcomplemento_list[[i]] <- complemento 
+    
+    matxseq_complemento <- rbind(matx[1:n, ], complemento)  
+    matxseq_complemento_list[[i]] <- matxseq_complemento 
+    
+    matxseq_complemento_soma <- colSums(matxseq_complemento)  
+    matxseq_complemento_list_soma[[i]] <- matxseq_complemento_soma  
+    
+    matpropclassico[i, ] <- matxseq_complemento_soma / nclassico 
+  } else {
+    complemento <- matrix(0, 0, length(p0))  
+    
+    matxseq_complemento <- rbind(matx[1:nclassico, ], complemento)  
+    matxseq_complemento_list[[i]] <- matxseq_complemento  
+    
+    matxseq_complemento_soma <- colSums(matxseq_complemento) 
+    matxseq_complemento_list_soma[[i]] <- matxseq_complemento_soma  
+    
+    matpropclassico[i, ] <- matxseq_complemento_soma / nclassico 
+  }
+  
+  
+}
+
+
+# Obs: a matpropclassico será os resultados da estimação frequentista com n=400
+
+# aqui vamos cortar as listas de matrizes geradas para fazer com mais n de interesses
+# nesse caso, para n =100, n = 50 e n = 20
+
+# para n = 100
+# cortando a lista gerada onde temos interesse
+linhas_desejadas100 <- c(1:nclassico100)
+
+# Cortar as linhas específicas
+lista_filtrada100 <- lapply(matxseq_complemento_list, function(matriz) matriz[linhas_desejadas100, , drop = FALSE])
+# Ver o resultado
+#lista_filtrada100
+
+# Criando uma matriz com as somas de cada coluna de cada matriz
+matriz_resultado100 <- do.call(rbind, lapply(lista_filtrada100, colSums))
+# Exibindo a matriz de resultados
+#matriz_resultado100
+matpropclassico100 <- matriz_resultado100/nclassico100
+#matpropclassico100
+
+
+
+# para n = 50
+# cortando a lista gerada onde temos interesse
+linhas_desejadas50 <- c(1:nclassico50)
+
+# Cortar as linhas específicas
+lista_filtrada50 <- lapply(matxseq_complemento_list, function(matriz) matriz[linhas_desejadas50, , drop = FALSE])
+# Ver o resultado
+#lista_filtrada50
+
+# Criando uma matriz com as somas de cada coluna de cada matriz
+matriz_resultado50 <- do.call(rbind, lapply(lista_filtrada50, colSums))
+# Exibindo a matriz de resultados
+#matriz_resultado50
+matpropclassico50 <- matriz_resultado50/nclassico50
+#matpropclassico50
+
+
+
+# para n = 20
+# cortando a lista gerada onde temos interesse
+linhas_desejadas20 <- c(1:nclassico20)
+
+# Cortar as linhas específicas
+lista_filtrada20 <- lapply(matxseq_complemento_list, function(matriz) matriz[linhas_desejadas20, , drop = FALSE])
+# Ver o resultado
+#lista_filtrada20
+
+# Criando uma matriz com as somas de cada coluna de cada matriz
+matriz_resultado20 <- do.call(rbind, lapply(lista_filtrada20, colSums))
+# Exibindo a matriz de resultados
+#matriz_resultado20
+matpropclassico20 <- matriz_resultado20/nclassico20
+#matpropclassico20
+
+
+
+# Resultados
+resultadocadasimulacao <-  cbind(matpropclassico100, nclassico100, matpropclassico50, nclassico50, matpropclassico20, nclassico20, matpropseqbay, matnamostral)
+#resultadocadasimulacao
+#p0
+
+# em que:
+# p0 parâmetros reais da multinomial gerada
+# matpropclassico = proporção estimada pelo método clássico em cada simulação
+# matpropseqbay = proporção estimada pelo método sequencial bayesiano em cada simulação
+# matnamostral = tamanho de amostra em que parou pelo método sequencial bayesiano em cada simulação
+# nclassico = tamanho amostral fixo definido para o método clássico
+# aqui aparece para cada uma das nsim vezes que simulamos
+
+# Resultados de cada simulação (caso queira ver cada passo é só descomentar)
+#matrimediato
+#matresperado
+#matsoma
+#matnamostral
+#matpropseqbay
+#matpropclassico
+#matsomaclassico
+
+# Exibe todos os resultados de cada passo do seq bay para cada umas das simulações
+# Se achar que não é necessário exibir todos os passos, só comentar
+#lista_rimediato
+#lista_propseqbay
+#lista_resperado
+#lista_parpost
+
+
+# Resultado médio
+mean(matrimediato)
+mean(matresperado)
+colMeans(matsoma)
+mean(matnamostral)
+colMeans(matpropseqbay)
+p0
+
+
+#### Resultados obtidos pelo método clássico para n = 100 ####
+
+# estimativas e intervalos do teste classico para n = 100
+
+propclassico100 <-  round(colMeans(matpropclassico100), digits=4)  # proporções finais estimadas pelo método clássico (média das simulações)
+desvioclassico100 <-  round(apply(matpropclassico100, 2, sd), digits=4)  # desvio padrão das simulações
+epclassico100 <-  desvioclassico100 / sqrt(nclassico100)  # erro padrão da média das simulações
+
+
+# fazendo intervalo de confiança para n = 100
+z <-  qnorm(0.975)
+erroclassico100 <-  z*(sqrt(propclassico100*(1-propclassico100)/nclassico100))
+lsclassico100 <-  round(propclassico100+erroclassico100,digits=3)
+liclassico100 <- round(propclassico100-erroclassico100,digits=3)
+cvclassico100 <- round(desvioclassico100/propclassico100*100,digits=2)
+
+
+# Resultados estimação clássica para n = 100
+propclassico100
+desvioclassico100
+epclassico100
+liclassico100;lsclassico100
+cvclassico100
+
+
+# Histogramas das simulações método clássico para n = 100
+
+# Um histograma para cada categoria
+par(mfrow = c(1, 3))
+hist(matpropclassico100[,1], ylab="Frequência",xlab="Proporção Estimada",main=nsim,sub= p0[1])
+mtext(nclassico100, side = 3)
+
+hist(matpropclassico100[,2], ylab="Frequência",xlab="Proporção Estimada",main=nsim,sub= p0[2])
+mtext(nclassico100, side = 3)
+
+hist(matpropclassico100[,3], ylab="Frequência",xlab="Proporção Estimada",main=nsim,sub= p0[3])
+mtext(nclassico100, side = 3)
+
+
+
+#### Resultados obtidos pelo método clássico para n = 50 ####
+
+# estimativas e intervalos do teste classico para n = 50
+
+propclassico50 <-  round(colMeans(matpropclassico50), digits=4)  # proporções finais estimadas pelo método clássico (média das simulações)
+desvioclassico50 <-  round(apply(matpropclassico50, 2, sd), digits=4)  # desvio padrão das simulações
+epclassico50 <-  desvioclassico50 / sqrt(nclassico50)  # erro padrão da média das simulações
+
+
+# fazendo intervalo de confiança para n = 50
+z <-  qnorm(0.975)
+erroclassico50 <-  z*(sqrt(propclassico50*(1-propclassico50)/nclassico50))
+lsclassico50 <-  round(propclassico50+erroclassico50,digits=3)
+liclassico50 <- round(propclassico50-erroclassico50,digits=3)
+cvclassico50 <- round(desvioclassico50/propclassico50*100,digits=2)
+
+
+# Resultados estimação clássica para n = 50
+propclassico50
+desvioclassico50
+epclassico50
+liclassico50;lsclassico50
+cvclassico50
+
+
+# Histogramas das simulações método clássico para n = 50
+
+# Um histograma para cada categoria
+par(mfrow = c(1, 3))
+hist(matpropclassico50[,1], ylab="Frequência",xlab="Proporção Estimada",main=nsim,sub= p0[1])
+mtext(nclassico50, side = 3)
+
+hist(matpropclassico50[,2], ylab="Frequência",xlab="Proporção Estimada",main=nsim,sub= p0[2])
+mtext(nclassico50, side = 3)
+
+hist(matpropclassico50[,3], ylab="Frequência",xlab="Proporção Estimada",main=nsim,sub= p0[3])
+mtext(nclassico50, side = 3)
+
+#### Resultados obtidos pelo método clássico para n = 20 ####
+
+# estimativas e intervalos do teste classico para n = 20
+
+propclassico20 <-  round(colMeans(matpropclassico20), digits=4)  # proporções finais estimadas pelo método clássico (média das simulações)
+desvioclassico20 <-  round(apply(matpropclassico20, 2, sd), digits=4)  # desvio padrão das simulações
+epclassico20 <-  desvioclassico20 / sqrt(nclassico20)  # erro padrão da média das simulações
+
+
+# fazendo intervalo de confiança para n = 20
+z <-  qnorm(0.975)
+erroclassico20 <-  z*(sqrt(propclassico20*(1-propclassico20)/nclassico20))
+lsclassico20 <-  round(propclassico20+erroclassico20,digits=3)
+liclassico20 <- round(propclassico20-erroclassico20,digits=3)
+cvclassico20 <- round(desvioclassico20/propclassico20*100,digits=2)
+
+
+# Resultados estimação clássica para n = 20
+propclassico20
+desvioclassico20
+epclassico20
+liclassico20;lsclassico20
+cvclassico20
+
+
+# Histogramas das simulações método clássico para n = 20
+
+# Um histograma para cada categoria
+par(mfrow = c(1, 3))
+hist(matpropclassico20[,1], ylab="Frequência",xlab="Proporção Estimada",main=nsim,sub= p0[1])
+mtext(nclassico20, side = 3)
+
+hist(matpropclassico20[,2], ylab="Frequência",xlab="Proporção Estimada",main=nsim,sub= p0[2])
+mtext(nclassico20, side = 3)
+
+hist(matpropclassico20[,3], ylab="Frequência",xlab="Proporção Estimada",main=nsim,sub= p0[3])
+mtext(nclassico20, side = 3)
+
+
+
+####### Resultados obtidos pelo método sequencial bayesiano ########
+
+# estimativas e intervalos do método sequencial bayesiano #
+
+propseqbay <- round(colMeans(matpropseqbay), digits=4)                # proporções finais estimadas pelo método sequencial bayesiano (média das simulações)
+nseqbay <- mean(matnamostral)                                         # tamanho amostral do método sequencial bayesiano
+desvioseqbay <- round(apply(matpropseqbay, 2, sd), digits=4)          # desvio padrão das simulações
+epseqbay <- round(desvioseqbay / sqrt(mean(matnamostral)), digits=4)  # erro padrão da média das simulações
+
+# fazendo intervalo de confiança
+z <- qnorm(0.975)
+erroseqbay <- z*(sqrt(propseqbay*(1-propseqbay)/nseqbay))
+lsseqbay <- round(propseqbay+erroseqbay,digits=3)
+liseqbay <- round(propseqbay-erroseqbay,digits=3)
+cvseqbay <- round(desvioseqbay/propseqbay*100,digits=2)
+
+# Resultados
+propseqbay
+nseqbay
+desvioseqbay
+epseqbay
+cvseqbay
+liseqbay;lsseqbay
+
+
+# Histograma das simulações do método sequencial bayesiano
+# Um histograma para cada categoria
+par(mfrow = c(1, 3))
+
+hist(matpropseqbay[,1], ylab="Frequência",xlab="Proporção Estimada",sub= p0[1])
+
+hist(matpropseqbay[,2], ylab="Frequência",xlab="Proporção Estimada",sub= p0[2])
+
+hist(matpropseqbay[,3], ylab="Frequência",xlab="Proporção Estimada",sub= p0[3])
+
+
+
+#### Resultados lado a lado
+propclassico100; propclassico50; propclassico20; propseqbay; p0 # p0 é o parametro real dado nas simulações
+nclassico100; nclassico50; nclassico20; nseqbay; round(nseqbay, 0)
+desvioclassico100; desvioclassico50; desvioclassico20; desvioseqbay
+epclassico100; epclassico50; epclassico20; epseqbay
+cvclassico100; cvclassico50; cvclassico20; cvseqbay;
+liclassico100; lsclassico100 #intervalo de confiança classico para n = 100
+liclassico50; lsclassico50 #intervalo de confiança classico para n = 50
+liclassico20; lsclassico20 #intervalo de confiança classico para n = 20
+liseqbay; lsseqbay # intervalo de confiança seq bay (como fazer o intervalo de credibilidade?)
+
+
+
+##### Resultado de cada simulação #####
+# Caso queira ver o resultado final de cada simulação, é só descomentar:
+
+#matpropseqbay    # matriz com os resultados de proporção sequencial bayesiana estimada de cada simulação para cada categoria
+#matnamostral     # matriz que vai receber o tamanho amostral de cada multinomial que parou pelo processo sequencial bayesiano
+#matpropclassico  # matriz com os resultados de proporção clássica estimada de cada multinomial simulada
+
+
+#matsoma            # matriz que vai receber a soma acumulada de cada categoria de cada multinomial simulada
+#matsomaclassico    # matriz que vai receber a soma de sucessos de cada simulação, considerando o tamanho de amostra clássico fixo
+#matrimediato       # matriz que vai receber os resultados do risco imediato (último) de cada simulação
+#matresperado       # matriz que vai receber os resultados do risco esperado (último) de cada simulação
+matvarposteriori   # matriz com os resultados da variância a posteriori de cada multinomial simulada
+matcovposteriori   # matriz com os resultados da covariância a posteriori de cada multinomial simulada
+#matparposteriori   # matriz com os resultados do parâmetro a da posteriori de cada multinomial simulada
+
+
+##### Passo a passo de cada simulação ####
+# Caso queira ver o passo a passo de cada simulação, é só descomentar:
+# listas
+
+#matxseq_list                   # lista para armazenar todas as observações de cada iteração só do método sequencial bayesiano
+#matxseq_complemento_list       # lista para armazenar as observações + complemento (que são as multinomiais completas geradas)
+#matxseq_complemento_list_soma  # lista para armazenar as somas de cada multinomial gerada completa
+#matcomplemento_list            # lista para armazenar os complementos
+
+
+#lista_propseqbay  # Lista para armazenar as prop seq bay de cada passo do sequencial bayesiano de cada simulação
+#lista_rimediato   # Lista para armazenar os riscos imediatos de cada passo do sequencial bayesiano de cada simulação
+#lista_resperado   # Lista para armazenar os riscos esperados de cada passo do sequencial bayesiano de cada simulação
+#lista_parpost     # Lista para armazenar os parametros da posteriori de cada passo do sequencial bayesiano de cada simulação
+
+# Essa matriz tem as 1000 multinomiais simuladas de tamanho 400, que foi o máximo frequentista
+# caso queira ver, apenas descomente
+# matxseq_complemento_list 
+
+
+
+# Apresentação de resultados
+
+cat("Proporção Sequencial Bayesiana de cada categoria = ", propseqbay, "\n")
+cat("Tamanho amostral Sequencial Bayesiana = ", round(nseqbay, 0), "\n")
+cat("Proporção Clássica de cada categoria = ", propclassico100, "\n")
+cat("Tamanho amostral Clássico = ", round(nclassico100, 0), "\n")
+cat("Média a priori = ", mpriori, "\n")
+cat("Variância a priori = ", varpriori, "\n")
+cat("Variância a posteriori = ", colMeans(matvarposteriori), "\n")
+cat("Covariância a posteriori = ", colMeans(matcovposteriori), "\n")
+cat("Risco Imediato = ", mean(matrimediato), "\n")
+cat("Risco Esperado = ", mean(matresperado), "\n")
+cat("Parâmetros da posteriori = ", colMeans(matparposteriori), "\n")
+
+
+
